@@ -1,0 +1,6 @@
+pandas
+PIL
+numpy
+matplotlib
+requests
+pillow
