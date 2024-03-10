@@ -1,8 +1,9 @@
+#headers:
 import tkinter as tk
 from tkinter import Toplevel, Listbox
 from PIL import Image, ImageTk
 import pandas
-from urllib.request import urlopen
+from urllib.request import urlopen #why is this blue
 import json
 import pandas as pd
 import matplotlib.pyplot as plt
@@ -10,6 +11,7 @@ import numpy as np
 import requests
 import time
 from tkinter.scrolledtext import ScrolledText
+from io import BytesIO
 
 class analysis(object):
 
@@ -17,8 +19,8 @@ class analysis(object):
 
         self.chatList = []
 
-        self.API_URL = "https://api-inference.huggingface.co/models/google/gemma-2b-it"
-        self.headers = {"Authorization": "Bearer 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"}
+        self.APIURL = "https://api-inference.huggingface.co/models/google/gemma-2b-it"
+        self.headers = {"Authorization": "Bearer <INSERT API KEY HERE> "} #I have omitted my Huggingface API key for obvious reasons. If you want to test the program you will have to get your own - sorry :)
 
         self.selectedDriver = None
         self.selectedDriverNumber = None
@@ -37,6 +39,7 @@ class analysis(object):
         self.driver_window_open = False
         self.mode_window_open = False
         self.chatbotOpen = False
+        self.radioWindowOpen = False
 
         width = 1280
         height = 720
@@ -46,16 +49,17 @@ class analysis(object):
         self.root.geometry(alignstr)
         self.root.resizable(width=False, height=False)
 
-        # Background image setup
         bg_image = Image.open("interfaceFiles/liveMenu.png")
         bg_photo = ImageTk.PhotoImage(bg_image)
         bg_label = tk.Label(self.root, image=bg_photo)
         bg_label.place(x=0, y=0, relwidth=1, relheight=1)
-        # Keep a reference to prevent garbage collection
         bg_label.image = bg_photo
 
-        self.chatbotWindowButton = tk.Button(self.root, text="Open AI Analyst", command=self.chatbotWindow,bg="#68c6c3",fg="black")
-        self.chatbotWindowButton.place(x=470,y=700)
+        self.chatbot_Window_Button = tk.Button(self.root, text="Open AI Analyst", command=self.chatbotWindow,bg="#68c6c3",fg="black")
+        self.chatbot_Window_Button.place(x=470,y=700)
+
+        self.radio_window_button = tk.Button(self.root, text="Open Radio Listener", command=self.radioWindow,bg="#68c6c3",fg="black")
+        self.radio_window_button.place(x=700,y=700)
 
         self.open_driver_window_button = tk.Button(self.root, text="Open Driver Select", command=self.driverWindow,bg="#68c6c3",fg="black")
         self.open_driver_window_button.place(x=10,y=700)
@@ -69,50 +73,91 @@ class analysis(object):
         self.mode_window_label = tk.Label(self.root, text="Default Mode: Single Sector Mode", bg="#68c6c3",fg="black")
         self.mode_window_label.place(x=230,y=680)
 
+        self.graph_Window_button = tk.Button(self.root, text="Toggle Graph Details", command=self.openGraph,bg="#68c6c3",fg="black")
+        self.graph_Window_button.place(x=840,y=700)
+
         self.selectedMode = "Single Sector Mode"
 
+        self.radioNumber = 0
         self.chatHistory = ""
+
+        self.showGraph = False
 
         self.start_updating()
         self.root.mainloop()
 
-    def query(self, input):
-            
-            payload = {
+    def radioWindow(self):
+        if not self.radioWindowOpen:
 
-                "inputs": self.chatHistory,
-                "parameters": {"max_new_tokens": 250}
-            }
-            
-            response = requests.post(self.API_URL, headers=self.headers, json=payload).json()
-            generated_text = response[0]["generated_text"]
-            answer_prefix = 'model'
-            actual_response = generated_text.rsplit(answer_prefix)[-1].strip()
-            self.chatList.append(input)
-            self.update_chat_history("Analyst: " + actual_response)
-            self.update_chat_history("\n")
-            return actual_response
-    
-    def send_message(self, event):
+            self.radioWindowOpen = True
+            self.rwin = Toplevel(self.root)
+            self.rwin.title = ("Radio Listener")
 
-        user_message = self.chat_input.get()
+            self.rwin.protocol("WM_DELETE_WINDOW", self.onRadioClose)
 
-        # Add user input to chat history 
-        self.update_chat_history(f"You: {user_message}")
-        self.update_chat_history("\n")
+            width = 640
+            height = 360
+            screenwidth = self.rwin.winfo_screenwidth()
+            screenheight = self.rwin.winfo_screenheight()
+            alignstr = '%dx%d+%d+%d' % (width, height, (screenwidth - width) // 2, (screenheight - height) // 2)
+            self.rwin.geometry(alignstr)
+            self.rwin.resizable(width=False, height=False)
 
-        # Clear the entry widget
-        self.chat_input.delete(0, tk.END)
+            searchbutton = tk.Button(self.rwin, command=self.getRadio,text="Get Team Radio")
+            searchbutton.place(relx=0.2,rely=0.9,relwidth=0.8,relheight=0.1)
 
-        self.chatHistory += ("<rules> you are an f1 data analyst. please try to keep your answers super short <start_of_turn>user " + user_message + "<end_of_turn> <start_of_turn>model")
+            rwinlabel = tk.Label(self.rwin, text="Team Radio URL Links")
+            rwinlabel.place(relx=0.2,y=0,relwidth=0.8,relheight=0.1)
 
-        self.query(user_message)
+            self.radioListbox = tk.Listbox(self.rwin)
+            self.radioListbox.place(x=0,rely=0.1, relwidth=0.2,relheight=0.9)
+
+            self.radios = ScrolledText(self.rwin, state='disabled', wrap=tk.WORD)
+            self.radios.place(relx=0.2,rely=0.1,relheight=0.8,relwidth=0.8)
+
+            driversSet = set()
+
+            for driver in self.driversData:
+                driversSet.add(driver["full_name"])
+
+            for driver in driversSet:
+                self.radioListbox.insert(tk.END, driver)
+
+            teamLabel = tk.Label(self.rwin, text="Drivers:")
+            teamLabel.place(x=0,y=0,relwidth=0.2,relheight=0.1)
+
+    def getRadio(self):
+        selected_index = self.radioListbox.curselection()
+        print(selected_index)
+        if selected_index:
+            selectedRadioListen = self.radioListbox.get(selected_index[0])
+
+            for driver in self.driversData:
+                if driver["full_name"] == selectedRadioListen:
+                    self.radioNumber = driver["driver_number"]
+                    print(self.radioNumber)
+
+        if self.radioNumber != 0:
+                radioURL = "https://api.openf1.org/v1/team_radio?session_key="+str(self.session)+"&driver_number="+str(self.radioNumber)
+                print(radioURL)
+                radios = urlopen(radioURL)
+                radioEntries = json.loads(radios.read().decode('utf-8'))
+                print(radioEntries)
+                for radioEntry in radioEntries:
+                    self.radios.insert(tk.END, radioEntry["recording_url"], "\n")
+   
+    def onRadioClose(self):
+        self.radioWindowOpen=False
+        self.radioNumber = 0
+        self.rwin.destroy()
 
     def chatbotWindow(self):
         if not self.chatbotOpen:
             self.chatbotOpen = True
             self.cwin = Toplevel(self.root)
             self.cwin.title("AI Analyst")
+
+            self.cwin.protocol("WM_DELETE_WINDOW", self.on_chatBot_window_close)
 
             width = 640
             height = 360
@@ -129,39 +174,104 @@ class analysis(object):
             self.chat_input.place(rely=0.82,x=0, relheight=0.15,relwidth=1)
             self.chat_input.bind("<Return>", self.send_message)
 
-    def update_chat_history(self, message):
-        # Ensure the ScrolledText widget is in normal state before inserting text
+    def query(self, input):
+            
+            payload = {
+
+                "inputs": self.chatHistory,
+                "parameters": {"max_new_tokens": 250}
+            }
+            
+            response = requests.post(self.APIURL, headers=self.headers, json=payload).json()
+            generated_text = response[0]["generated_text"]
+            answerPrefixx = 'model'
+            actualResponse = generated_text.rsplit(answerPrefixx)[-1].strip()
+            self.chatList.append(input)
+            self.updateChatHistoryistory("Analyst: " + actualResponse)
+            self.updateChatHistoryistory("\n")
+            return actualResponse
+    
+    def send_message(self, event):
+
+        user_message = self.chat_input.get()
+
+        self.updateChatHistoryistory(f"You: {user_message}")
+        self.updateChatHistoryistory("\n")
+
+        self.chat_input.delete(0, tk.END)
+
+        self.chatHistory += ("<rules> you are an f1 data analyst. please try to keep your answers super short. <start_of_turn>user " + user_message + "<end_of_turn> <start_of_turn>model")
+
+        self.query(user_message)
+
+    def on_chatBot_window_close(self):
+        self.chat_history = "";
+        self.chatbotOpen = False
+        self.cwin.destroy()
+        
+    def updateChatHistoryistory(self, message):
         self.chat_history.configure(state='normal')
         self.chat_history.insert(tk.END, message + "\n")
         self.chat_history.configure(state='disabled')
-
-        # Scroll to the end of the chat history
         self.chat_history.yview(tk.END)
 
-
     def driverWindow(self):
-        if not self.driver_window_open:  # Check if the window is already open
-            self.driver_window_open = True  # Set the flag to indicate the window is open
+        if not self.driver_window_open: 
+            self.driver_window_open = True  
             self.dwin = Toplevel(self.root)
             self.dwin.title("Driver Select")
             
-            self.dwin.protocol("WM_DELETE_WINDOW", self.on_driver_window_close)  # Handle window close
+            self.dwin.protocol("WM_DELETE_WINDOW", self.on_driver_window_close)
             
-            # Create a Listbox in the new window
             self.driver_listbox = Listbox(self.dwin)
             self.driver_listbox.pack(padx=10, pady=10, fill=tk.BOTH, expand=True)
             
             confirm_button = tk.Button(self.dwin, text="Confirm", command=self.confirm_driver)
             confirm_button.pack(pady=10)
 
-            # Example items for the Listbox
             driversSet = set()
 
             for driver in self.driversData:
                 driversSet.add(driver["full_name"])
 
             for driver in driversSet:
-                self.driver_listbox.insert(tk.END, driver)
+                self.driver_listbox.insert(tk.END, driver)      
+    
+    def confirm_driver(self):
+        selected_index = self.driver_listbox.curselection()
+        if selected_index:
+            self.selectedDriver = self.driver_listbox.get(selected_index[0])
+
+            for driver in self.driversData:
+                if driver["full_name"] == self.selectedDriver:
+                    self.selectedDriverNumber = driver["driver_number"]
+                    self.selectedTeamColour = driver["team_colour"]
+                    driverMug = driver["headshot_url"]
+                    print(driverMug)
+                    print(self.selectedDriverNumber)
+
+            if driverMug:
+                with urlopen(driverMug) as mug:
+                    mugData = mug.read()
+                
+                pil_image = Image.open(BytesIO(mugData))
+                tk_image = ImageTk.PhotoImage(pil_image)
+
+                mug = tk.Label(self.root, image=tk_image)
+                mug.place(x=0,y=582)
+
+                mug.image = tk_image
+
+            self.selected_driver_label.config(text=f"Selected Driver: {self.selectedDriver}")
+            self.selected_driver_label.config(bg="#" + str(self.selectedTeamColour))
+            self.dwin.destroy()
+            self.driver_window_open = False
+        else:
+            print("No driver selected")
+
+    def on_driver_window_close(self):
+        self.driver_window_open = False
+        self.dwin.destroy()
     
     def modeWindow(self):
         if not self.mode_window_open:
@@ -179,51 +289,33 @@ class analysis(object):
 
             self.mode_listbox.insert(tk.END, "Single Sector")
             self.mode_listbox.insert(tk.END, "Compare Sector")
-            self.mode_listbox.insert(tk.END, "Per Sector Gap")        
+            self.mode_listbox.insert(tk.END, "Per Sector Gap")      
 
-    def on_driver_window_close(self):
-        self.driver_window_open = False
-        self.dwin.destroy()
-    
-    def on_mode_window_close(self):
-        self.mode_window_open = False
-        self.mwin.destroy()
-    
-    def confirm_driver(self):
-        selected_index = self.driver_listbox.curselection()
-        if selected_index:
-            self.selectedDriver = self.driver_listbox.get(selected_index[0])
-
-            for driver in self.driversData:
-                if driver["full_name"] == self.selectedDriver:
-                    self.selectedDriverNumber = driver["driver_number"]
-                    print(self.selectedDriverNumber)
-
-            self.selected_driver_label.config(text=f"Selected Driver: {self.selectedDriver}")
-            self.dwin.destroy()
-            self.driver_window_open = False
-        else:
-            print("No driver selected")
-    
     def confirm_mode(self):
         selected_index = self.mode_listbox.curselection()
         if selected_index:
             self.selectedMode = self.mode_listbox.get(selected_index[0])
+    
+    def on_mode_window_close(self):
+        self.mode_window_open = False
+        self.mwin.destroy()
         
         self.mode_window_label.config(text=f"Selected Mode: {self.selectedMode}")
         self.mwin.destroy()
         self.mode_window_open = False
 
+    def openGraph(self):
+        self.showGraph = not self.showGraph
+    
     def start_updating(self):
         
         if self.selectedDriverNumber:
 
-            lapUrl = "https://api.openf1.org/v1/laps?session_key="+str(self.session)+"&driver_number="+str(self.selectedDriverNumber)
+            lapUrl = "https://api.openf1.org/v1/laps?session_key="+str(self.session)+"&driver_number="+str(self.selectedDriverNumber) 
             lapJson = urlopen(lapUrl) 
-            lapData = json.loads(lapJson.read().decode('utf-8'))
-            df = pd.DataFrame(lapData)
+            self.lapData = json.loads(lapJson.read().decode('utf-8'))
+            df = pd.DataFrame(self.lapData)
 
-            # Set the background color of the plot to black, and line colors as desired
             plt.figure(figsize=(12, 6))
             
             # Set the face and edge color to black
@@ -242,20 +334,21 @@ class analysis(object):
             elif self.selectedMode == "Per Sector Gap":
                 print("N/A - Feature not present yet.")
 
-            # Title and labels
             plt.title('Lap Duration Over Laps: ' + self.selectedDriver)
             plt.xlabel('Lap Number', color = 'white')
             plt.ylabel('Lap Duration (seconds)',color = 'white')
 
-            # Enable the grid
             plt.grid(True)
             
-            legend = plt.legend(facecolor='lightgray')  # Set the background color of the legend
+            legend = plt.legend(facecolor='lightgray') 
             plt.setp(legend.get_texts(), color='black')
 
-            # Save the figure
             plt.savefig("data/lap_times.png", facecolor='black')
-            plt.close()
+
+            if self.showGraph:
+                plt.show()
+            else:
+                plt.close()
 
             graph_image = Image.open("data/lap_times.png")
             graph_photo = ImageTk.PhotoImage(graph_image)
@@ -264,9 +357,15 @@ class analysis(object):
             graph_label.image = graph_photo
 
         self.root.after(1000, self.start_updating)
-
-
-    
+ 
 if __name__ == "__main__":
     app = analysis()
 
+# Program by Elliott Jones (with a bit of help from GPT-4)
+# Created 02/03/2024
+# 
+# 02/03 - Added main menu
+# 04/03 - Added pandas and matplotlib for graph manipulation
+# 06/03 - Begun AI model solution
+# 09/03 - Added radio listener, beautified main menu, finally got AI working
+# 10/13 - Further polished main meny, cleaned up code for final submission - well done me :D
