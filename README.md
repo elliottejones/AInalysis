@@ -7,5 +7,7 @@ I have omitted my huggingface API key for the AI mode for obvious reasons, so th
 
 This program accesses the OpenF1 API/Database for the live updating data from F1. (https://openf1.org/)
 
+I use tkinter for my interface, along with some other image files to tie the main look together.
+
 # Requirements
 As this is a python program, there are some required libraries for my program to work properly. Please see requirements.txt.
