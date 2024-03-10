@@ -1,6 +1,5 @@
+Pillow
 pandas
-PIL
-numpy
 matplotlib
+numpy
 requests
-pillow
