@@ -15,4 +15,4 @@ As this is a python program, there are some required libraries for my program to
 
 # --
 Feel free to give me any feedback as this is my first ever proper application written in python and there is definitley some room for improvement!
-My discord is **elzi_**, feel free to drop me a message :)
+My discord is **elzi_**  - feel free to drop me a message :)
