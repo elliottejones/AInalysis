@@ -368,4 +368,4 @@ if __name__ == "__main__":
 # 04/03 - Added pandas and matplotlib for graph manipulation
 # 06/03 - Begun AI model solution
 # 09/03 - Added radio listener, beautified main menu, finally got AI working
-# 10/13 - Further polished main meny, cleaned up code for final submission - well done me :D
+# 10/13 - Further polished main menu, cleaned up code for final submission - well done me :D
